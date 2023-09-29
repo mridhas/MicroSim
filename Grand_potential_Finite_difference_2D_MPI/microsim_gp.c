@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
-#include <stdlib.h> 
+#include <stdlib.h>
 #include <stdbool.h>
 #include <sys/stat.h>
 #include <gsl/gsl_errno.h>
@@ -64,11 +64,11 @@
 
 MPI_Request request;
 int main(int argc, char * argv[]) {
-  
+
   MPI_Init(&argc,&argv);
   MPI_Comm_size(MPI_COMM_WORLD,&numtasks);
   MPI_Comm_rank(MPI_COMM_WORLD,&taskid);
-  
+
   reading_input_parameters(argv);
   initialize_variables();
   initialize_functions_solverloop();
@@ -76,7 +76,7 @@ int main(int argc, char * argv[]) {
   if (!((FUNCTION_F == 2) || (FUNCTION_F==5) || (GRAIN_GROWTH))) {
     init_propertymatrices(T);
   }
-  
+
   for (a=0; a<NUMPHASES-1; a++) {
     for(k=0; k<NUMCOMPONENTS-1; k++) {
       printf("slopes[a][NUMPHASES-1][k]=%le\n", slopes[a][NUMPHASES-1][k]);
@@ -88,27 +88,35 @@ int main(int argc, char * argv[]) {
   if (ELASTICITY) {
     Build_derived_type_stress(iter_gridinfo_w_instance, &MPI_iter_gridinfo);
   }
-  
-  
+
+
+  int *dims = (int*)calloc(DIMENSION, sizeof(int));
+  MPI_Dims_create(numtasks, DIMENSION, dims);
   if(DIMENSION == 2) {
-    numworkers_x = atol(argv[4]);
-    numworkers_y = atol(argv[5]);
+    //numworkers_x = atol(argv[4]);
+    //numworkers_y = atol(argv[5]);
+    numworkers_x = dims[0];
+    numworkers_y = dims[1];
     numworkers_z = 1;
+    printf("numworkers_x=%d, numworkers_y=%d, numworkers_z=%d\n",numworkers_x, numworkers_y,  numworkers_z);
     if(numtasks != numworkers_x*numworkers_y) {
       fprintf(stdin,"The domain decomposition does not correspond to the number of spawned tasks!!\n: number of processes=numworkers_x*numworkers_y");
       exit(0);
     }
   } else {
-    numworkers_x = atol(argv[4]);
-    numworkers_y = atol(argv[5]);
-    numworkers_z = atol(argv[6]);
+    //numworkers_x = atol(argv[4]);
+    //numworkers_y = atol(argv[5]);
+    //numworkers_z = atol(argv[6]);
+    numworkers_x = dims[0];
+    numworkers_y = dims[1];
+    numworkers_z = dims[2];
     printf("numworkers_x=%d, numworkers_y=%d, numworkers_z=%d\n",numworkers_x, numworkers_y,  numworkers_z);
     if(numtasks != numworkers_x*numworkers_y*numworkers_z) {
       fprintf(stdin,"The domain decomposition does not correspond to the number of spawned tasks!!\n: number of processes=numworkers_x*numworkers_y");
       exit(0);
     }
   }
-  
+
   if(taskid==MASTER) {
     mkdir("DATA",0777);
     if (!WRITEHDF5){
@@ -124,9 +132,9 @@ int main(int argc, char * argv[]) {
       fill_domain(argv);
     }
   }
- 
+
   populate_table_names();
-  
+
   if(ELASTICITY) {
     for (b=0; b<NUMPHASES; b++) {
       stiffness_phase_n[b].C11 = stiffness_phase[b].C11/stiffness_phase[NUMPHASES-1].C44;
@@ -134,18 +142,18 @@ int main(int argc, char * argv[]) {
       stiffness_phase_n[b].C44 = stiffness_phase[b].C44/stiffness_phase[NUMPHASES-1].C44;
     }
   }
-  
+
 //   if (DIMENSION == 2) {
 //     Mpiinfo(taskid);
 //   } else {
   Mpiinfo(taskid);
-  
- 
+
+
 //   }
 //   exit(0);
 //   if (FUNCTION_F == 2) {
-  
-  
+
+
   if ((FUNCTION_F != 5) && (!GRAIN_GROWTH)) {
     Calculate_Tau();
   } else {
@@ -161,22 +169,22 @@ int main(int argc, char * argv[]) {
       }
     }
 //     if (GRAIN_GROWTH) {
-//       
+//
 //     }
     printf("tau[0][NUMPHASES-1]=%le\n",tau_ab[0][NUMPHASES-1]);
 //     exit(0);
   }
 
 //   }
-  
+
   //Checking tdb functions
-  
+
 //   if (taskid == MASTER) {
 //     double c_x;
 //     double c[NUMCOMPONENTS-1];
 //     double c_calc[NUMCOMPONENTS-1];
 //     double mu[NUMCOMPONENTS-1];
-//     double dpsi;    
+//     double dpsi;
 //     char filename[1000];
 //     double fe;
 //     FILE *fp_check;
@@ -196,8 +204,8 @@ int main(int argc, char * argv[]) {
 //       fclose(fp_check);
 //     }
 //   }
-  
-  
+
+
   if ((STARTTIME !=0) || (RESTART !=0)) {
     if (WRITEHDF5) {
       readfromfile_mpi_hdf5(gridinfo_w, argv, numworkers, STARTTIME);
@@ -211,7 +219,7 @@ int main(int argc, char * argv[]) {
     if (SHIFT) {
       FILE *fp;
       fp = fopen("DATA/shift.dat","r");
-      
+
       for(file_iter=0; file_iter <= STARTTIME/saveT; file_iter++) {
         fscanf(fp,"%ld %ld\n",&time_file, &position);
       }
@@ -226,25 +234,25 @@ int main(int argc, char * argv[]) {
       }
     }
   }
-  
+
   if(boundary_worker) {
    apply_boundary_conditions(taskid);
   }
-    
+
   mpiexchange_left_right(taskid);
   mpiexchange_top_bottom(taskid);
   if (DIMENSION==3) {
     mpiexchange_front_back(taskid);
   }
-  
+
   if (TEMPGRADY) {
     BASE_POS    = (temperature_gradientY.gradient_OFFSET/deltay) - shift_OFFSET;
     GRADIENT    = (temperature_gradientY.DeltaT)*deltay/(temperature_gradientY.Distance);
     temp_bottom = temperature_gradientY.base_temp - BASE_POS*GRADIENT + (workers_mpi.offset[Y]-workers_mpi.offset_y)*GRADIENT;
     apply_temperature_gradientY(gridinfo_w, shift_OFFSET, 0);
   }
-   
-  
+
+
   if (!WRITEHDF5) {
     if ((ASCII == 0)) {
       writetofile_mpi_binary(gridinfo_w, argv, 0 + STARTTIME);
@@ -254,7 +262,7 @@ int main(int argc, char * argv[]) {
   } else {
     writetofile_mpi_hdf5(gridinfo_w, argv, 0 + STARTTIME);
   }
-  
+
 //   printf("I am coming here\n");
 //   exit(0);
 //   writetofile_worker();
@@ -273,7 +281,7 @@ int main(int argc, char * argv[]) {
   }
 //   printf("Finished smoothing\n");
 //   exit(0);
-  
+
   if (!WRITEHDF5) {
     if ((ASCII == 0)) {
       writetofile_mpi_binary(gridinfo_w, argv, 0 + STARTTIME);
@@ -286,16 +294,16 @@ int main(int argc, char * argv[]) {
   printf("Finished smoothing\n");
 //   exit(0);
 
-  
+
   for(t=1;t<=ntimesteps;t++) {
     mpiexchange_left_right(taskid);
     mpiexchange_top_bottom(taskid);
     if (DIMENSION == 3) {
       mpiexchange_front_back(taskid);
     }
-    
+
     solverloop_phasefield(workers_mpi.start, workers_mpi.end);
-    
+
     if(boundary_worker) {
       apply_boundary_conditions(taskid);
     }
@@ -304,18 +312,18 @@ int main(int argc, char * argv[]) {
     if (DIMENSION == 3) {
       mpiexchange_front_back(taskid);
     }
-    
+
     if ((FUNCTION_F != 5) && (!GRAIN_GROWTH)) {
       solverloop_concentration(workers_mpi.start,workers_mpi.end);
     }
-    
+
     if (TEMPGRADY) {
       BASE_POS    = (temperature_gradientY.gradient_OFFSET/deltay) - shift_OFFSET + ((temperature_gradientY.velocity/deltay)*(t*deltat));
       GRADIENT    = (temperature_gradientY.DeltaT)*deltay/(temperature_gradientY.Distance);
       temp_bottom = temperature_gradientY.base_temp - BASE_POS*GRADIENT + (workers_mpi.offset[Y]-workers_mpi.offset_y)*GRADIENT;
       apply_temperature_gradientY(gridinfo_w, shift_OFFSET, t);
     }
-    
+
     if (ELASTICITY) {
       for(iter=1; iter < MAX_ITERATIONS; iter++) {		//elasticity solver
 		     mpiexchange_top_bottom_stress(taskid);
@@ -327,7 +335,7 @@ int main(int argc, char * argv[]) {
          if (boundary_worker) {
 		        apply_boundary_conditions_stress(taskid);
          }
-		     
+
 // 		     if ((iter%100)==0) {
 //            error = 0.0;
 // 		       for(x=workers_mpi.start[X]; x<=workers_mpi.end[X]; x++) {
@@ -341,7 +349,7 @@ int main(int argc, char * argv[]) {
 //          }
       }
     }
-  
+
     if (t%100 == 0) {
       if(SHIFT) {
         MPI_Iallreduce(&workers_max_min.INTERFACE_POS_MAX,  &INTERFACE_POS_GLOBAL,  1, MPI_LONG, MPI_MAX, MPI_COMM_WORLD, &request);
@@ -351,7 +359,7 @@ int main(int argc, char * argv[]) {
           shift_ON = 1;
         }
         if (shift_ON) {
-          apply_shiftY(gridinfo_w, INTERFACE_POS_GLOBAL); 
+          apply_shiftY(gridinfo_w, INTERFACE_POS_GLOBAL);
 //           if (taskid == MASTER) {
           shift_OFFSET += (INTERFACE_POS_GLOBAL - shiftj);
 //           }
@@ -359,11 +367,11 @@ int main(int argc, char * argv[]) {
         }
       }
     }
-    
+
     if(boundary_worker) {
       apply_boundary_conditions(taskid);
     }
-    
+
     if(t%saveT == 0) {
       if (!WRITEHDF5) {
         if ((ASCII == 0)) {
@@ -407,8 +415,8 @@ int main(int argc, char * argv[]) {
     }
   }
   free_variables();
-  
-  
+
+
   if (taskid == MASTER) {
     index_count = layer_size*rows_x;
     for (index_=0; index_ < index_count; index_++) {
@@ -423,13 +431,13 @@ int main(int argc, char * argv[]) {
   }
   MPI_Type_free(&MPI_gridinfo_vector_b);
   MPI_Type_free(&MPI_gridinfo_vector_c);
-  
+
   MPI_Type_free(&MPI_gridinfo);
-  
+
   if (ELASTICITY) {
     MPI_Type_free(&MPI_gridinfo_vector_b_stress);
     MPI_Type_free(&MPI_gridinfo_vector_c_stress);
-    
+
     MPI_Type_free(&MPI_iter_gridinfo);
   }
   MPI_Finalize();
@@ -444,7 +452,7 @@ int main(int argc, char * argv[]) {
 //   long start_y;
 //   sprintf(name,"Worker_%d.dat",taskid);
 //   fp = fopen(name,"w");
-//   
+//
 //   fprintf(fp,"%ld\n",workers_mpi.rows[X]);
 //   fprintf(fp,"%ld\n",workers_mpi.rows[Y]);
 //   for(x=0;x < workers_mpi.rows[X]; x++) {
